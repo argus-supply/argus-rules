@@ -43,7 +43,7 @@ def safe_files(source: pathlib.Path):
         if not path.is_file() or len(relative.parts) > 20:
             raise SystemExit(f"unsafe Rules path: {relative}")
         mode = stat.S_IMODE(path.stat().st_mode)
-        if mode & 0o111:
+        if mode & 0o111 and path.suffix.lower() not in {".yaml", ".yml", ".json"}:
             raise SystemExit(f"executable Rules file is forbidden: {relative}")
         if path.stat().st_size > 16 * 1024 * 1024:
             raise SystemExit(f"oversized Rules file: {relative}")
