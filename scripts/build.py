@@ -61,6 +61,7 @@ with tempfile.TemporaryDirectory(prefix="argus-rules-") as temporary:
     content_digests: set[str] = set()
     source_stats = []
     excluded_private_key_templates = 0
+    excluded_dangerous_protocol_templates = 0
     cves: set[str] = set()
     for item in lock["sources"]:
         checkout = work / item["id"]
@@ -99,7 +100,8 @@ with tempfile.TemporaryDirectory(prefix="argus-rules-") as temporary:
                         excluded_private_key_templates += 1
                         continue
                     if re.search(r"(?m)^(?:code|javascript|headless):\s*$", text):
-                        raise SystemExit(f"{item['id']}: dangerous protocol in {relative}")
+                        excluded_dangerous_protocol_templates += 1
+                        continue
                     match = re.search(r"(?m)^id:\s*['\"]?([A-Za-z0-9_.:-]+)", text)
                     if match is None:
                         raise SystemExit(f"{item['id']}: template lacks a valid id: {relative}")
@@ -128,7 +130,7 @@ with tempfile.TemporaryDirectory(prefix="argus-rules-") as temporary:
     for path in sorted(stage.rglob("*")):
         if path.is_file():
             files.append({"path": str(path.relative_to(stage)), "size": path.stat().st_size, "sha256": sha256(path)})
-    statistics = {"templateCount": len(seen_ids), "cveCount": len(cves), "fingerprintFiles": sum(item["files"] for item in source_stats if item["kind"] == "fingerprints"), "excludedPrivateKeyTemplates": excluded_private_key_templates, "sources": source_stats}
+    statistics = {"templateCount": len(seen_ids), "cveCount": len(cves), "fingerprintFiles": sum(item["files"] for item in source_stats if item["kind"] == "fingerprints"), "excludedPrivateKeyTemplates": excluded_private_key_templates, "excludedDangerousProtocolTemplates": excluded_dangerous_protocol_templates, "sources": source_stats}
     manifest = {"schemaVersion": 1, "component": "rules", "version": args.version, "rulesSchema": 1, "nucleiVersionRange": ">=3.11.1 <4.0.0", "sources": lock["sources"], "statistics": statistics, "files": files}
     (stage / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     (stage / "rules.lock.json").write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
