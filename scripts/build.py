@@ -63,6 +63,9 @@ with tempfile.TemporaryDirectory(prefix="argus-rules-") as temporary:
     excluded_private_key_templates = 0
     excluded_dangerous_protocol_templates = 0
     excluded_non_template_yaml = 0
+    excluded_missing_helper_templates = 0
+    excluded_unsafe_helpers = 0
+    helper_files = 0
     cves: set[str] = set()
     for item in lock["sources"]:
         checkout = work / item["id"]
@@ -84,6 +87,25 @@ with tempfile.TemporaryDirectory(prefix="argus-rules-") as temporary:
             metadata = checkout / "data/all.json"
             source_stats.append({"id": item["id"], "kind": item["kind"], "files": 0, "metadataSha256": sha256(metadata), "metadataBytes": metadata.stat().st_size})
             continue
+        allowed_helpers: set[str] = set()
+        if item["id"] == "nuclei-templates":
+            helper_root = checkout / "helpers"
+            allowed_suffixes = {"", ".txt", ".csv", ".json", ".yaml", ".yml", ".dtd"}
+            for helper in safe_files(helper_root):
+                relative_helper = helper.relative_to(checkout).as_posix()
+                content = helper.read_bytes()
+                unsafe = helper.suffix.lower() not in allowed_suffixes or re.search(
+                    rb"BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY", content
+                ) is not None
+                if unsafe:
+                    excluded_unsafe_helpers += 1
+                    continue
+                target = stage / "templates" / item["id"] / relative_helper
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+                os.chmod(target, 0o444)
+                allowed_helpers.add(relative_helper)
+                helper_files += 1
         for include in item["include"]:
             source = checkout / include
             if not source.exists():
@@ -102,6 +124,13 @@ with tempfile.TemporaryDirectory(prefix="argus-rules-") as temporary:
                         continue
                     if re.search(r"(?m)^(?:code|javascript|headless):\s*$", text):
                         excluded_dangerous_protocol_templates += 1
+                        continue
+                    helper_references = {
+                        value.rstrip("'\"),]}")
+                        for value in re.findall(r"helpers/[A-Za-z0-9_./-]+", text)
+                    }
+                    if any(reference not in allowed_helpers for reference in helper_references):
+                        excluded_missing_helper_templates += 1
                         continue
                     match = re.search(r"(?m)^id:\s*['\"]?([A-Za-z0-9_.:-]+)", text)
                     if match is None:
@@ -132,7 +161,7 @@ with tempfile.TemporaryDirectory(prefix="argus-rules-") as temporary:
     for path in sorted(stage.rglob("*")):
         if path.is_file():
             files.append({"path": str(path.relative_to(stage)), "size": path.stat().st_size, "sha256": sha256(path)})
-    statistics = {"templateCount": len(seen_ids), "cveCount": len(cves), "fingerprintFiles": sum(item["files"] for item in source_stats if item["kind"] == "fingerprints"), "excludedPrivateKeyTemplates": excluded_private_key_templates, "excludedDangerousProtocolTemplates": excluded_dangerous_protocol_templates, "excludedNonTemplateYaml": excluded_non_template_yaml, "sources": source_stats}
+    statistics = {"templateCount": len(seen_ids), "cveCount": len(cves), "fingerprintFiles": sum(item["files"] for item in source_stats if item["kind"] == "fingerprints"), "helperFiles": helper_files, "excludedPrivateKeyTemplates": excluded_private_key_templates, "excludedDangerousProtocolTemplates": excluded_dangerous_protocol_templates, "excludedNonTemplateYaml": excluded_non_template_yaml, "excludedMissingHelperTemplates": excluded_missing_helper_templates, "excludedUnsafeHelpers": excluded_unsafe_helpers, "sources": source_stats}
     manifest = {"schemaVersion": 1, "component": "rules", "version": args.version, "rulesSchema": 1, "nucleiVersionRange": ">=3.11.1 <4.0.0", "sources": lock["sources"], "statistics": statistics, "files": files}
     (stage / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     (stage / "rules.lock.json").write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
