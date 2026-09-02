@@ -60,6 +60,7 @@ with tempfile.TemporaryDirectory(prefix="argus-rules-") as temporary:
     seen_ids: dict[str, tuple[str, pathlib.Path, str]] = {}
     content_digests: set[str] = set()
     source_stats = []
+    excluded_private_key_templates = 0
     cves: set[str] = set()
     for item in lock["sources"]:
         checkout = work / item["id"]
@@ -95,7 +96,8 @@ with tempfile.TemporaryDirectory(prefix="argus-rules-") as temporary:
                         continue
                     text = path.read_text(errors="strict")
                     if re.search(r"BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY", text):
-                        raise SystemExit(f"{item['id']}: embedded private key in {relative}")
+                        excluded_private_key_templates += 1
+                        continue
                     if re.search(r"(?m)^(?:code|javascript|headless):\s*$", text):
                         raise SystemExit(f"{item['id']}: dangerous protocol in {relative}")
                     match = re.search(r"(?m)^id:\s*['\"]?([A-Za-z0-9_.:-]+)", text)
@@ -126,7 +128,7 @@ with tempfile.TemporaryDirectory(prefix="argus-rules-") as temporary:
     for path in sorted(stage.rglob("*")):
         if path.is_file():
             files.append({"path": str(path.relative_to(stage)), "size": path.stat().st_size, "sha256": sha256(path)})
-    statistics = {"templateCount": len(seen_ids), "cveCount": len(cves), "fingerprintFiles": sum(item["files"] for item in source_stats if item["kind"] == "fingerprints"), "sources": source_stats}
+    statistics = {"templateCount": len(seen_ids), "cveCount": len(cves), "fingerprintFiles": sum(item["files"] for item in source_stats if item["kind"] == "fingerprints"), "excludedPrivateKeyTemplates": excluded_private_key_templates, "sources": source_stats}
     manifest = {"schemaVersion": 1, "component": "rules", "version": args.version, "rulesSchema": 1, "nucleiVersionRange": ">=3.11.1 <4.0.0", "sources": lock["sources"], "statistics": statistics, "files": files}
     (stage / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     (stage / "rules.lock.json").write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
