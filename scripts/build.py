@@ -62,6 +62,7 @@ with tempfile.TemporaryDirectory(prefix="argus-rules-") as temporary:
     source_stats = []
     excluded_private_key_templates = 0
     excluded_dangerous_protocol_templates = 0
+    excluded_non_template_yaml = 0
     cves: set[str] = set()
     for item in lock["sources"]:
         checkout = work / item["id"]
@@ -104,7 +105,8 @@ with tempfile.TemporaryDirectory(prefix="argus-rules-") as temporary:
                         continue
                     match = re.search(r"(?m)^id:\s*['\"]?([A-Za-z0-9_.:-]+)", text)
                     if match is None:
-                        raise SystemExit(f"{item['id']}: template lacks a valid id: {relative}")
+                        excluded_non_template_yaml += 1
+                        continue
                     template_id = match.group(1)
                     file_digest = hashlib.sha256(path.read_bytes()).hexdigest()
                     if file_digest in content_digests:
@@ -130,7 +132,7 @@ with tempfile.TemporaryDirectory(prefix="argus-rules-") as temporary:
     for path in sorted(stage.rglob("*")):
         if path.is_file():
             files.append({"path": str(path.relative_to(stage)), "size": path.stat().st_size, "sha256": sha256(path)})
-    statistics = {"templateCount": len(seen_ids), "cveCount": len(cves), "fingerprintFiles": sum(item["files"] for item in source_stats if item["kind"] == "fingerprints"), "excludedPrivateKeyTemplates": excluded_private_key_templates, "excludedDangerousProtocolTemplates": excluded_dangerous_protocol_templates, "sources": source_stats}
+    statistics = {"templateCount": len(seen_ids), "cveCount": len(cves), "fingerprintFiles": sum(item["files"] for item in source_stats if item["kind"] == "fingerprints"), "excludedPrivateKeyTemplates": excluded_private_key_templates, "excludedDangerousProtocolTemplates": excluded_dangerous_protocol_templates, "excludedNonTemplateYaml": excluded_non_template_yaml, "sources": source_stats}
     manifest = {"schemaVersion": 1, "component": "rules", "version": args.version, "rulesSchema": 1, "nucleiVersionRange": ">=3.11.1 <4.0.0", "sources": lock["sources"], "statistics": statistics, "files": files}
     (stage / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     (stage / "rules.lock.json").write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
