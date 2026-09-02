@@ -1,0 +1,33 @@
+name: Check upstreams
+
+on:
+  schedule:
+    - cron: '43 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Report changed upstream heads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          report="$(mktemp)"
+          python3 - "$report" <<'PY'
+          import json, subprocess, sys
+          lines=[]
+          for item in json.load(open('locks/rules.lock.json'))['sources']:
+              head=subprocess.check_output(['gh','api',f"repos/{item['repository']}/commits/HEAD",'--jq','.sha'],text=True).strip()
+              if head != item['commit']:
+                  lines.append(f"- {item['id']}: `{item['commit']}` → `{head}`")
+          open(sys.argv[1],'w').write('\n'.join(lines))
+          PY
+          if [[ -s "$report" ]]; then
+            gh issue create --title "Upstream Rules candidates $(date -u +%F)" --body-file "$report"
+          fi

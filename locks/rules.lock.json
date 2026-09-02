@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {"id":"nuclei-templates","repository":"projectdiscovery/nuclei-templates","commit":"b98e6097cb84e73e7a480436062d685a8f898824","license":"MIT","licensePath":"LICENSE.md","kind":"nuclei","include":["http","dns","network","ssl","file"]},
+    {"id":"fingerprinthub","repository":"0x727/FingerprintHub","commit":"1f7c3e762a95af44e05647edba22d5fea0eb3b70","license":"MIT","licensePath":"LICENSE.md","kind":"fingerprints","include":["service_fingerprint_v4.json","web_fingerprint_v3.json","web_fingerprint_v4.json"]},
+    {"id":"missing-cve-metadata","repository":"edoardottt/missing-cve-nuclei-templates","commit":"a097e0f37c630494a029ce5a4a60eccd4b0301f8","license":"MIT","licensePath":"LICENSE","kind":"coverage-metadata","include":[]},
+    {"id":"wordfence-cve","repository":"topscoder/nuclei-wordfence-cve","commit":"3a0c7564cd63388c8609babac19fe743ec03ae31","license":"MIT","licensePath":"LICENSE","kind":"nuclei","include":["nuclei-templates"]}
+  ]
+}
