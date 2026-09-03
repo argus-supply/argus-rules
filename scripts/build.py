@@ -33,7 +33,7 @@ def sha256(path: pathlib.Path) -> str:
     return value.hexdigest()
 
 
-def safe_files(source: pathlib.Path):
+def safe_files(source: pathlib.Path, allow_data_executable: bool = False):
     for path in sorted(source.rglob("*")):
         relative = path.relative_to(source)
         if path.is_symlink():
@@ -43,7 +43,7 @@ def safe_files(source: pathlib.Path):
         if not path.is_file() or len(relative.parts) > 20:
             raise SystemExit(f"unsafe Rules path: {relative}")
         mode = stat.S_IMODE(path.stat().st_mode)
-        if mode & 0o111 and path.suffix.lower() not in {".yaml", ".yml", ".json"}:
+        if mode & 0o111 and not allow_data_executable and path.suffix.lower() not in {".yaml", ".yml", ".json"}:
             raise SystemExit(f"executable Rules file is forbidden: {relative}")
         if path.stat().st_size > 16 * 1024 * 1024:
             raise SystemExit(f"oversized Rules file: {relative}")
@@ -91,7 +91,7 @@ with tempfile.TemporaryDirectory(prefix="argus-rules-") as temporary:
         if item["id"] == "nuclei-templates":
             helper_root = checkout / "helpers"
             allowed_suffixes = {"", ".txt", ".csv", ".json", ".yaml", ".yml", ".dtd"}
-            for helper in safe_files(helper_root):
+            for helper in safe_files(helper_root, allow_data_executable=True):
                 relative_helper = helper.relative_to(checkout).as_posix()
                 content = helper.read_bytes()
                 unsafe = helper.suffix.lower() not in allowed_suffixes or re.search(
