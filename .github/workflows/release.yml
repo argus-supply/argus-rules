@@ -38,7 +38,7 @@ jobs:
           mkdir extracted
           zstd -dc "dist/argus-rules_${{ steps.version.outputs.value }}.tar.zst" | tar -xf - -C extracted
           ./nuclei -validate -duc -nc -allow-local-file-access -t extracted/templates
-          sha256sum --check dist/SHA256SUMS
+          (cd dist && sha256sum --check SHA256SUMS)
       - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
         with:
           name: rules-release
